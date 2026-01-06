@@ -3,5 +3,10 @@
     "orientation": "horizontal",
     "inverted_image": false,
     "scheduler_sleep_time": 60,
-    "startup": true
+    "startup": true,
+    "buttons": {
+        "enabled": false,
+        "hardware_preset": "custom",
+        "buttons": []
+    }
 }

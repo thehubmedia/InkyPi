@@ -9,6 +9,7 @@ InkyPi is an open-source, customizable E-Ink display powered by a Raspberry Pi. 
 **Features**:
 - Natural paper-like aethetic: crisp, minimalist visuals that are easy on the eyes, with no glare or backlight
 - Web Interface allows you to update and configure the display from any device on your network
+- **Button Support**: Physical GPIO buttons for interactive control (Inky Impression built-in buttons supported)
 - Minimize distractions: no LEDS, noise, or notifications, just the content you care about
 - Easy installation and configuration, perfect for beginners and makers alike
 - Open source project allowing you to modify, customize, and create your own plugins
@@ -130,6 +131,23 @@ If your display model has a corresponding driver in the link above, it’s likel
 Distributed under the GPL 3.0 License, see [LICENSE](./LICENSE) for more information.
 
 This project includes fonts and icons with separate licensing and attribution requirements. See [Attribution](./docs/attribution.md) for details.
+
+## Button Support
+
+InkyPi supports physical GPIO buttons for interactive control. The Inky Impression 7.3" and 13.3" displays have built-in buttons that work out of the box.
+
+**Quick Start:**
+Add this to your `device.json` to enable the built-in buttons on Inky Impression 7.3":
+```json
+{
+  "buttons": {
+    "enabled": true,
+    "hardware_preset": "inky_impression_7.3"
+  }
+}
+```
+
+For detailed configuration, custom button mappings, and plugin development guide, see [Button Support Documentation](./docs/button_support.md).
 
 ## Issues
 

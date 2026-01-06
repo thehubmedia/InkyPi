@@ -29,6 +29,10 @@ class RefreshTask:
         self.refresh_event.set()
         self.refresh_result = {}
 
+        # Track currently displayed plugin for button actions
+        self.current_plugin_id = None
+        self.current_plugin_instance_name = None
+
     def start(self):
         """Starts the background thread for refreshing the display."""
         if not self.thread or not self.thread.is_alive():
@@ -123,6 +127,10 @@ class RefreshTask:
                         else:
                             logger.info(f"Image already displayed, skipping refresh. | refresh_info: {refresh_info}")
 
+                        # Update tracking for currently displayed plugin
+                        self.current_plugin_id = refresh_action.get_plugin_id()
+                        self.current_plugin_instance_name = refresh_info.get("plugin_instance")
+
                         # update latest refresh data in the device config
                         self.device_config.refresh_info = RefreshInfo(**refresh_info)
                         self.device_config.write_config()
@@ -202,6 +210,72 @@ class RefreshTask:
 
         logger.info(f"System Stats: {metrics}")
 
+    def refresh_current_plugin(self):
+        """Refresh the currently displayed plugin (triggered by button)."""
+        if not self.current_plugin_id or not self.current_plugin_instance_name:
+            logger.warning("No current plugin to refresh")
+            return
+
+        logger.info(f"Button action: Refreshing current plugin '{self.current_plugin_id}'")
+        refresh_action = ButtonRefresh(
+            self.current_plugin_id,
+            self.current_plugin_instance_name,
+            {"button_id": 0}  # Generic refresh
+        )
+        self.manual_update(refresh_action)
+
+    def next_plugin(self):
+        """Advance to the next plugin in the active playlist (triggered by button)."""
+        logger.info("Button action: Next plugin")
+        playlist_manager = self.device_config.get_playlist_manager()
+        current_dt = self._get_current_datetime()
+        playlist = playlist_manager.determine_active_playlist(current_dt)
+
+        if not playlist or not playlist.plugins:
+            logger.warning("No active playlist or no plugins in playlist")
+            return
+
+        # Get next plugin in rotation
+        plugin_instance = playlist.get_next_plugin()
+        logger.info(f"Next plugin: {plugin_instance.name}")
+
+        refresh_action = PlaylistRefresh(playlist, plugin_instance, force=True)
+        self.manual_update(refresh_action)
+
+    def previous_plugin(self):
+        """Go to the previous plugin in the active playlist (triggered by button)."""
+        logger.info("Button action: Previous plugin")
+        playlist_manager = self.device_config.get_playlist_manager()
+        current_dt = self._get_current_datetime()
+        playlist = playlist_manager.determine_active_playlist(current_dt)
+
+        if not playlist or not playlist.plugins:
+            logger.warning("No active playlist or no plugins in playlist")
+            return
+
+        # Move back in the playlist
+        # Decrement index by 2 (one to undo the increment, one to go back)
+        playlist.current_plugin_index = (playlist.current_plugin_index - 2) % len(playlist.plugins)
+        plugin_instance = playlist.get_next_plugin()
+        logger.info(f"Previous plugin: {plugin_instance.name}")
+
+        refresh_action = PlaylistRefresh(playlist, plugin_instance, force=True)
+        self.manual_update(refresh_action)
+
+    def handle_plugin_specific_button(self, button_params: dict):
+        """Handle plugin-specific button action (triggered by button)."""
+        if not self.current_plugin_id or not self.current_plugin_instance_name:
+            logger.warning("No current plugin for button action")
+            return
+
+        logger.info(f"Button action: Plugin-specific for '{self.current_plugin_id}'")
+        refresh_action = ButtonRefresh(
+            self.current_plugin_id,
+            self.current_plugin_instance_name,
+            button_params
+        )
+        self.manual_update(refresh_action)
+
 class RefreshAction:
     """Base class for a refresh action. Subclasses should override the methods below."""
     
@@ -274,7 +348,7 @@ class PlaylistRefresh(RefreshAction):
 
         # Check if a refresh is needed based on the plugin instance's criteria
         if self.plugin_instance.should_refresh(current_dt) or self.force:
-            logger.info(f"Refreshing plugin instance. | plugin_instance: '{self.plugin_instance.name}'") 
+            logger.info(f"Refreshing plugin instance. | plugin_instance: '{self.plugin_instance.name}'")
             # Generate a new image
             image = plugin.generate_image(self.plugin_instance.settings, device_config)
             image.save(plugin_image_path)
@@ -286,3 +360,66 @@ class PlaylistRefresh(RefreshAction):
                 image = img.copy()
 
         return image
+
+class ButtonRefresh(RefreshAction):
+    """Performs a refresh triggered by a button press, delegating to the plugin's handle_button method.
+
+    Attributes:
+        plugin_id (str): The ID of the plugin to refresh.
+        plugin_instance_name (str): Optional name of specific plugin instance.
+        button_params (dict): Parameters from the button configuration.
+    """
+
+    def __init__(self, plugin_id: str, plugin_instance_name: str, button_params: dict):
+        self.plugin_id = plugin_id
+        self.plugin_instance_name = plugin_instance_name
+        self.button_params = button_params
+
+    def execute(self, plugin, device_config, current_dt: datetime):
+        """Performs a button-triggered refresh by calling the plugin's handle_button method."""
+        # Find the plugin instance settings
+        playlist_manager = device_config.get_playlist_manager()
+        plugin_instance = None
+
+        # Search for the plugin instance by name across all playlists
+        for playlist in playlist_manager.playlists:
+            for instance in playlist.plugins:
+                if instance.plugin_id == self.plugin_id and instance.name == self.plugin_instance_name:
+                    plugin_instance = instance
+                    break
+            if plugin_instance:
+                break
+
+        if not plugin_instance:
+            logger.warning(f"Plugin instance not found: {self.plugin_instance_name}")
+            # Fallback to generating a regular image
+            return plugin.generate_image({}, device_config)
+
+        # Call the plugin's handle_button method
+        button_id = self.button_params.get("button_id", 0)
+        logger.info(f"Calling handle_button on plugin '{self.plugin_id}' with button_id={button_id}")
+
+        result_image = plugin.handle_button(button_id, plugin_instance.settings, device_config)
+
+        # If plugin returned an image, use it; otherwise generate a fresh one
+        if result_image is not None:
+            # Update the plugin instance's cached image
+            plugin_image_path = os.path.join(device_config.plugin_image_dir, plugin_instance.get_image_path())
+            result_image.save(plugin_image_path)
+            plugin_instance.latest_refresh_time = current_dt.isoformat()
+            return result_image
+        else:
+            # Plugin didn't return an image, just refresh normally
+            return plugin.generate_image(plugin_instance.settings, device_config)
+
+    def get_refresh_info(self):
+        """Return refresh metadata as a dictionary."""
+        return {
+            "refresh_type": "Button Press",
+            "plugin_id": self.plugin_id,
+            "plugin_instance": self.plugin_instance_name
+        }
+
+    def get_plugin_id(self):
+        """Return the plugin ID associated with this refresh."""
+        return self.plugin_id

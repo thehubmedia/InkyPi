@@ -61,6 +61,32 @@ class BasePlugin:
         """
         pass  # Default implementation does nothing
 
+    def handle_button(self, button_id: int, settings, device_config):
+        """Optional method for handling button press events.
+
+        Plugins can override this method to respond to hardware button presses.
+        When a button is configured with action="plugin_specific", this method
+        will be called with the button_id from the action_params.
+
+        Args:
+            button_id: Integer ID of the button that was pressed (from action_params)
+            settings: The plugin instance's settings dict
+            device_config: The device configuration object
+
+        Returns:
+            PIL.Image: A new image to display, or None to keep the current image
+
+        Example:
+            def handle_button(self, button_id, settings, device_config):
+                if button_id == 1:
+                    self.next_item()
+                elif button_id == 2:
+                    self.previous_item()
+                return self.generate_image(settings, device_config)
+        """
+        logger.info(f"Button {button_id} pressed but plugin does not handle buttons")
+        return None  # Default implementation does nothing
+
     def get_plugin_id(self):
         return self.config.get("id")
 

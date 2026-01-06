@@ -1,0 +1,50 @@
+{
+    "buttons": {
+        "enabled": true,
+        "hardware_preset": "inky_impression_7.3",
+        "buttons": [
+            {
+                "id": "button_a",
+                "label": "A",
+                "pin": 5,
+                "pull_up": true,
+                "bounce_time": 0.2,
+                "action": "plugin_specific",
+                "action_params": {
+                    "button_id": 1
+                }
+            },
+            {
+                "id": "button_b",
+                "label": "B",
+                "pin": 6,
+                "pull_up": true,
+                "bounce_time": 0.2,
+                "action": "plugin_specific",
+                "action_params": {
+                    "button_id": 2
+                }
+            },
+            {
+                "id": "button_c",
+                "label": "C",
+                "pin": 16,
+                "pull_up": true,
+                "bounce_time": 0.2,
+                "action": "plugin_specific",
+                "action_params": {
+                    "button_id": 3
+                }
+            },
+            {
+                "id": "button_d",
+                "label": "D",
+                "pin": 24,
+                "pull_up": true,
+                "bounce_time": 0.2,
+                "action": "refresh_current",
+                "action_params": {}
+            }
+        ]
+    }
+}
